@@ -4,10 +4,26 @@
     Game
 {% endblock %}
 
+{% block java %}
+<script src="/static/gameEngine.js"></script>
+{% endblock %}
+
 {% block main %}
     Da Index
-    <table>
-        <tr class="hand">
+    <table class="board">
+        <tr>
+            <td class="opponent_graveyard"></image></td>
+            <td class="opponent_library"><image alt="Back" src="/static/images/cards/Back.jpeg" style="max-height:100%; max-width:100%"></image></td>
+            <td class="opponent_lands"></td>
+        </tr>
+        <td id="test"></td>
+        <tr class=""></tr>
+        <tr class = hand>
+        </tr>
+        <tr>
+            <td>
+                <button id="draw">Draw</button>
+            </td>
         </tr>
     </table>
 {% endblock %}

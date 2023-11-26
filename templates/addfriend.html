@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Add Friend
+{% endblock %}
+
+{% block main %}
+Please enter their Unique ID Number<br><br>
+    <form action="/addfriend" method="post">
+        <div class="mb-3">
+            <input autocomplete="off" autofocus class="form-control mx-auto w-auto" id="id" name="id" placeholder="Unique ID" type="text">
+        </div>
+        <button class="btn btn-primary" type="submit">Add</button>
+    </form>
+{% endblock %}

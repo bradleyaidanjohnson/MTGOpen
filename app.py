@@ -151,3 +151,29 @@ def game():
         return render_template("game.html")
     else:
         return render_template("index.html")
+    
+@app.route("/addfriend", methods=["GET", "POST"])
+@login_required
+def addfriend():
+    if request.method == "GET":
+        return render_template("addfriend.html")
+    else:
+        friendid = request.form.get("id")
+        print(friendid)
+        # Ensure username was submitted
+        if not friendid:
+            return apology("must provide a friend id", 400)
+
+        # Query database for username
+        rows = db.execute("SELECT * FROM users WHERE id = ?", friendid)
+
+        # Ensure username exists and password is correct
+        if len(rows) == 0:
+            return apology("could not find this user id", 400)
+
+        # Register new user
+        friendList = db.execute("SELECT friends FROM users WHERE user=?;", session["user_id"])
+        friendList[0].append(friendid)
+        db.execute(
+            "UPDATE users (friends) VALUES (?);", friendList)
+        return render_template("login.html")
