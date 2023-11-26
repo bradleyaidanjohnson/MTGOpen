@@ -6,13 +6,10 @@ from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime
 
-from helpers import apology, login_required, lookup, usd
+from helpers import apology, login_required
 
 # Configure application
 app = Flask(__name__)
-
-# Custom filter
-app.jinja_env.filters["usd"] = usd
 
 # Configure session to use filesystem (instead of signed cookies)
 app.config["SESSION_PERMANENT"] = False
@@ -20,7 +17,7 @@ app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
 # Configure CS50 Library to use SQLite database
-db = SQL("sqlite:///finance.db")
+db = SQL("sqlite:///mtgopen.db")
 
 
 @app.after_request
@@ -35,44 +32,10 @@ def after_request(response):
 @login_required
 def index():
     if request.method == "GET":
-        """Show portfolio of stocks"""
-        holdings = db.execute(
-            "SELECT * FROM holdings WHERE userid = ?;", session["user_id"]
-        )
-        total = 0
-        availablecash = db.execute(
-            "SELECT cash FROM users WHERE id = ?;", session["user_id"]
-        )
-        for holding in holdings:
-            # loop the list of stock dicts
-            holding.update({"current_price": lookup(holding["stock"])["price"]})
-            holding["current_value"] = holding["current_price"] * holding["shares"]
-            total += holding["current_value"]
-
-            holding["current_value"] = usd(holding["current_value"])
-            holding["current_price"] = usd(holding["current_price"])
-
-        totalassets = usd(total + availablecash[0]["cash"])
-        totalcash = usd(availablecash[0]["cash"])
-        total = usd(total)
-        return render_template(
-            "index.html",
-            holdings=holdings,
-            total=total,
-            totalcash=totalcash,
-            totalassets=totalassets,
-        )
+        
+        return render_template("index.html")
     else:
-        # if arrived by post process adding cash
-        addcash = request.form.get("addcash")
-        if not addcash.isnumeric():
-            return apology("please enter a number", 400)
-        addcash = int(addcash)
-        availablecash = db.execute(
-            "SELECT cash FROM users WHERE id = ?;", session["user_id"]
-        )
-        cash = availablecash[0]["cash"] + addcash
-        db.execute("UPDATE users SET cash = ? WHERE id = ?;", cash, session["user_id"])
+       
         return redirect("/")
     
     
@@ -180,3 +143,11 @@ def register():
         return render_template("login.html")
     else:
         return render_template("register.html")
+
+@app.route("/game", methods=["GET", "POST"])
+@login_required
+def game():
+    if request.method == "GET":
+        return render_template("game.html")
+    else:
+        return render_template("index.html")
