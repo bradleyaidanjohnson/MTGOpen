@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+   
+<head>
+    <title>MTG Open: {% block title %}{% endblock %}</title>
+    <link href="/static/styles.css" rel="stylesheet">
+    <style>
+    </style>
+</head>
+ 
+<body>
+ 
+    <!-- Header Section -->
+    <header>
+        <div class="head1">
+              GeeksforGeeks
+          </div>
+        <div class="head2">
+              A computer science portal for geeks
+          </div>
+    </header>
+ 
+    <!-- Menu Navigation Bar -->
+    <nav class="menu">
+        <a href="#home">HOME</a>
+        <a href="#news">NEWS</a>
+        <a href="#notification">
+              NOTIFICATIONS
+          </a>
+        <div class="menu-log">
+            <a href="#login">LOGIN</a>
+        </div>
+    </nav>
+ 
+    <!-- Body section -->
+    <main class="body_sec">
+        <section id="Content">
+            {% block main %}{% endblock %}
+        </section>
+    </main>
+ 
+    <!-- Footer Section -->
+    <footer>Footer Section</footer>
+</body>
+   
+</html>
