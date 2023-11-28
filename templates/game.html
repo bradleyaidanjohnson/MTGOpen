@@ -5,7 +5,9 @@
 {% endblock %}
 
 {% block java %}
-<script src="/static/gameEngine.js"></script>
+<script data-main="static/gameEngine.js" src="node_modules/requirejs/require.js"></script>
+
+<script type="module" src="/static/gameEngine.js"></script>
 {% endblock %}
 
 {% block main %}

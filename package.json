@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "requirejs": "^2.3.6",
+    "sql.js": "^1.8.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.6"
+  }
+}

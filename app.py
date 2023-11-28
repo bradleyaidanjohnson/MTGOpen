@@ -84,9 +84,6 @@ def register():
         username = request.form.get("username")
         password = request.form.get("password")
         confirmation = request.form.get("confirmation")
-        print(username)
-        print(password)
-        print(confirmation)
         # Ensure username was submitted
         if not username:
             return apology("must provide username", 400)
@@ -156,10 +153,9 @@ def game():
 @login_required
 def addfriend():
     if request.method == "GET":
-        return render_template("addfriend.html")
+        return render_template("addfriend.html", id=session["user_id"])
     else:
         friendid = request.form.get("id")
-        print(friendid)
         # Ensure username was submitted
         if not friendid:
             return apology("must provide a friend id", 400)
@@ -167,13 +163,104 @@ def addfriend():
         # Query database for username
         rows = db.execute("SELECT * FROM users WHERE id = ?", friendid)
 
-        # Ensure username exists and password is correct
+        # Ensure username exists
         if len(rows) == 0:
             return apology("could not find this user id", 400)
+        elif int(friendid) == session["user_id"]:
+            return apology("you can't be your own friend...", 400)
+        # Check if they are already friends
+        friendList = db.execute("SELECT friends FROM users WHERE id=?;", session["user_id"])
+        alreadyfriends = False
+        if any(friendList[0].values()) == True:
+            friendListString = friendList[0]['friends']
+            for friend in friendListString.split(","):
+                if friend == friendid:
+                    alreadyfriends = True
+        if alreadyfriends:
+            return apology("This person is already your friend", 400)
+        
+        friendReqString = ''
+        # Check if a friend request has already been made
+        friendReqList = db.execute("SELECT friendrequests FROM users WHERE id=?;", friendid)
+        alreadyrequested = False
+        if any(friendReqList[0].values()) == True:
+            print("debug01")
+            friendReqString = friendReqList[0]['friendrequests']
+            print(friendReqString)
+            if int(friendReqString) == session["user_id"]:
+                alreadyrequested = True
+            for req in friendReqString.split(","):
+                if req == session["user_id"]:
+                    alreadyrequested = True
+        if alreadyrequested:
+            return apology("This person has your friend request pending", 400)
 
-        # Register new user
-        friendList = db.execute("SELECT friends FROM users WHERE user=?;", session["user_id"])
-        friendList[0].append(friendid)
-        db.execute(
-            "UPDATE users (friends) VALUES (?);", friendList)
-        return render_template("login.html")
+        # Add friend request
+        
+        if any(friendReqList[0].values()) == False:
+            friendReqString = friendid
+            print(friendReqString)
+        else:
+            friendReqString = friendReqList[0]['friendrequests'] + ',' + friendid
+        print(friendReqString)
+        db.execute("UPDATE users SET friendrequests=? WHERE id=?;", session["user_id"], friendReqString)
+        return render_template("index.html")
+    
+@app.route("/friends", methods=["GET", "POST"])
+@login_required
+def friends():
+    friends = db.execute("SELECT * FROM users JOIN friends ON users.id= friends.user1 WHERE ;")
+    requests = db.execute("SELECT friendrequests FROM users WHERE id=?;", session["user_id"])
+    friendReqList = []
+    if any(requests[0].values()) == True:
+        friendReqList = requests[0]['friendrequests'].split(",")
+    requestNames = []
+    for reqID in friendReqList:
+        requestDict = db.execute("SELECT username FROM users WHERE id=?;", reqID)
+        requestNames.append(requestDict[0]['username'])
+
+    friends = db.execute("SELECT friends FROM users WHERE id=?;", session["user_id"])
+    friendList = []
+    if any(friends[0].values()) == True:
+        friendList = friends[0]['friends'].split(",")
+    friendNames = []
+    for friendID in friendList:
+        friendDict = db.execute("SELECT username FROM users WHERE id=?;", friendID)
+        friendNames.append(friendDict[0]['username'])
+
+    if request.method == "GET":
+
+
+        return render_template("friends.html", requests=requestNames, friends=friendNames)
+    else:
+        user = request.form.get("user")
+        reply = request.form.get("reply")
+        print(reply)
+        # get userid from username
+        userID = db.execute("SELECT id FROM users WHERE username=?", user)[0]['id']
+        if reply == "accept":
+            print("debug02")
+            friends = db.execute("SELECT friends FROM users WHERE id=?;", session["user_id"])
+            if (friends[0]['friends']):
+                newFriendListString = friends[0]['friends'] + ',' + str(userID)
+            else:
+                newFriendListString = userID
+            db.execute("UPDATE users SET friends=? WHERE id=?;", newFriendListString, session["user_id"])
+
+            friends = db.execute("SELECT friends FROM users WHERE id=?;", str(userID))
+            if (friends[0]['friends']):
+                newFriendListString = (friends[0]['friends']) + ',' + str(session["user_id"])
+            else:
+                newFriendListString = session["user_id"]
+            db.execute("UPDATE users SET friends=? WHERE id=?;", newFriendListString, userID)
+        requests = db.execute("SELECT friendrequests FROM users WHERE id=?;", session["user_id"])
+        friendReqList = []
+        friendReqList = requests[0]['friendrequests'].split(",")
+        friendReqList.remove(str(userID))
+        if friendReqList:
+            newReqListString = ','.join(friendReqList)
+            db.execute("UPDATE users SET friendrequests=? WHERE id=?;", newReqListString, session["user_id"])
+        else:
+            db.execute("UPDATE users SET friendrequests='' WHERE id=?;", session["user_id"])
+
+        return render_template("friends.html", requests=requestNames, friends=friendNames)

@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Friends
+{% endblock %}
+
+{% block main %}
+<p>
+    <table>
+        <thead>
+            <td>Name</td>
+        </thead>
+        {% for request in requests %}
+            <tr>
+                <td>
+                    {{ request }}
+                </td>
+                    <form action="/friends" method="post">
+                        <input id="user" name="user" type="hidden" value="{{ request }}">
+                        <td><button type="submit" name="reply" id="reply" value="accept">Accept</button></td>
+                        <td><button type="submit" name="reply" id="reply" value="decline">Decline</button></td>
+                    </form>
+                </tr>
+            {% endfor %}
+    </table>
+</p>
+<p>
+    <table>
+        <thead>
+            <td>Friend Name</td>
+        </thead>
+        {% for friend in friends %}
+        <tr>
+            <td>
+                {{ friend }}
+            </td>
+                <form action="/friends" method="post">
+                    <input id="user" name="user" type="hidden" value="{{ friend }}">
+                    <td><button type="submit" name="remove" id="remove" value="remove">Remove</button></td>
+                    <td><button type="submit" name="challenge" id="challenge" value="challenge">Challenge</button></td>
+                </form>
+            </tr>
+        {% endfor %}
+    </table>
+</p>
+
+{% endblock %}

@@ -1,33 +1,20 @@
-let phase = ["Untap", "Upkeep", "Draw", "Main 1", "Combat", "Main 2", "End"];
-let deck1 = ["Plains", "Hopeful Initiate", "Plains", "Coppercoat Vanguard", "Plains", "Adeline, Resplendent Cathar", "Plains", "Recruitment Officer" , "Brutal Cathar", "Plains", "Knight-Errant of Eos", "Plains"]
-let hand1 = []
-document.addEventListener('DOMContentLoaded', function() {
-    Init(1);
-    document.querySelector('#test').innerHTML =phase[0];
-    document.querySelector('#draw').addEventListener('click', function() {
-        Draw(deck1, hand1);
-        Hand();
-    });
-});
+const sqlite3 = require('sqlite3').verbose();
 
-function Draw(deck, hand) {
-    hand.push(deck.shift())
-}
-
-function Init(players) {
-    
-    for (let i = 0; i < players; i++) 
-    {
-        for (let i = 0; i < 7; i++) 
-        {
-            Draw(deck1, hand1);
-        }
+let db = new sqlite3.Database('./mtgopen.db', sqlite3.OPEN_READWRITE, (err) => {
+    if (err) {
+      console.error(err.message);
     }
-}
+    console.log('Connected to the mtg open database.');
+  });
 
-function Hand() {
-    document.querySelector('.hand').innerHTML = "";
-    for (card in hand1) {
-        document.querySelector('.hand').innerHTML += `<td><image alt="Plains" src="/static/images/cards/530155.jpg" style="max-height:100%; max-width:100%"></td>`;
+db.serialize(() => {
+    db.run(`INSERT INTO cards (id,name,edition,type)
+    VALUES("99","fake card","BRD","Creature")`)
+})
+
+  db.close((err) => {
+    if (err) {
+      console.error(err.message);
     }
-}
+    console.log('Close the database connection.');
+  });
