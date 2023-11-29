@@ -8,8 +8,7 @@ let db = new sqlite3.Database('./mtgopen.db', sqlite3.OPEN_READWRITE, (err) => {
   });
 
 db.serialize(() => {
-    db.run(`INSERT INTO cards (id,name,edition,type)
-    VALUES("99","fake card","BRD","Creature")`)
+    db.run(`SELECT * FROM cards`)
 })
 
   db.close((err) => {
