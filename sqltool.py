@@ -4,16 +4,16 @@ import random
 con = sqlite3.connect("mtgopen.db")
 db = con.cursor()
 
-def GetLibraryIDs(gameID, player):
-    data = [gameID, player]
+def GetLibraryIDs(gameID, playerIndex):
+    data = [gameID, playerIndex]
     library = (db.execute("SELECT id FROM ingamecards WHERE game=? AND location='library' AND owner=? ORDER BY position;", data)).fetchall()
     libraryList = []
     for card in library:
         libraryList.append(card[0])
     return libraryList
         
-def GetHandIDs(gameID, player):
-    data = [gameID, player]
+def GetHandIDs(gameID, playerIndex):
+    data = [gameID, playerIndex]
     hand = (db.execute("SELECT id FROM ingamecards WHERE game=? AND location='hand' AND owner=?;", data)).fetchall()
     handList = []
     for card in hand:
@@ -22,7 +22,7 @@ def GetHandIDs(gameID, player):
 
 def IngameCardIDToName(id):
     data = [id]
-    name = (db.execute("SELECT Nname FROM cards JOIN ingamecards ON cards.Nid = ingamecards.printedid WHERE ingamecards.id=?;", data)).fetchall()[0]
+    name = (db.execute("SELECT Nname FROM cards JOIN ingamecards ON cards.Nid = ingamecards.printedid WHERE ingamecards.id=?;", data)).fetchone()[0]
     return name
     
 def StartingLife(gameID, format, players):
@@ -35,25 +35,25 @@ def StartingLife(gameID, format, players):
 
     con.commit()
 
-def ShuffleLibrary(gameID, player):
-    data = [gameID, player]
+def ShuffleLibrary(gameID, playerIndex):
+    data = [gameID, playerIndex]
     rows = db.execute("SELECT COUNT(*) FROM ingamecards WHERE game=? AND location='library' AND owner=?;", data)
     rows = rows.fetchone()[0]
 
     randomNumbers = random.sample(range(rows), rows)
-    data = [gameID, player]
+    data = [gameID, playerIndex]
     for row in (db.execute("SELECT id FROM ingamecards WHERE game=? AND location='library' AND owner=?;", data)).fetchall():
         data = [randomNumbers.pop(), row[0]]
         db.execute("UPDATE ingamecards SET position=? WHERE id=?;", data)
     con.commit()
 
-def DrawLibraryHand(gameID, player, drawSize):
-    data = [player, player, gameID, drawSize]
+def DrawLibraryHand(gameID, playerIndex, drawSize):
+    data = [playerIndex, playerIndex, gameID, drawSize]
     db.execute("UPDATE ingamecards SET position='', location='hand', controller=? WHERE owner=? AND game=? ORDER BY position DESC LIMIT ?;", data)
     con.commit()
 
-def HandToLibraryAll(gameID, player):
-    data = [gameID, player]
+def HandToLibraryAll(gameID, playerIndex):
+    data = [gameID, playerIndex]
     hand = (db.execute("SELECT id FROM ingamecards WHERE game=? AND (location='hand' OR location='library') AND owner=?;", data)).fetchall()
     randomNumbers = random.sample(range(len(hand)), len(hand))
     for card in hand:
@@ -61,15 +61,72 @@ def HandToLibraryAll(gameID, player):
         db.execute("UPDATE ingamecards SET position=?, location='library' WHERE id=?;", data)
     con.commit()
 
-def PrintHands(gameID, player):
-    data = [player, gameID]
+def PrintHands(gameID, playerIndex):
+    data = [playerIndex, gameID]
     hand = (db.execute("SELECT Nname FROM cards JOIN ingamecards ON cards.Nid = ingamecards.printedid WHERE ingamecards.location='hand' AND controller=? AND game=?;", data)).fetchall()
     for card in hand:
         print(card[0])
 
-def Action(gameID, player):
-    answer = input(f"{player}: Will you take an action?)")
-    print(answer)
+def Action(gameID, playerIndex):
+    while True:
+        try:
+            answer = str(input(f"{playerNames[playerIndex]}: you have priority:\nH: Play a card from your Hand.\nP: Pass Priority.\nWhat would you like to do?\n"))
+        except ValueError:
+            print("Invalid response: please enter a letter")
+            continue
+        if answer == 'p':
+            break
+        elif answer == "h":
+            print("play a card from hand")
+            PlayCardHand(playerIndex)
+            continue
+        else:
+            print("Invalid response: please choose one of the options")
+            continue
+
+def PlayCardHand(playerIndex):
+    # get hand int a list
+    hand = GetHandIDs(gameID, playerIndex)
+    while True:
+        print(f"Pick a card: ")
+        for y in range(len(hand)):
+            name = IngameCardIDToName(hand[y])
+            print(f"{(y + 1)}: {name}")
+        print("Or P to cancel.")
+        answer = input(f"Pick an option:")
+        if answer == 'p':
+            break
+        chosenInGameCardID = hand[int(answer) - 1]
+        if PlayCard(chosenInGameCardID, playerIndex):
+            break
+        else:
+            print("Card cannot be played, please pick again")
+            continue
+        
+def PlayCard(id, playerIndex):
+    # get card type
+    # ADD COLUMN TO INGAMECARDS CALLED TYPE WHERE YOU CAN CHECK IF ANY TYPE CHANGES HAVE OCCURED CHECK THAT BEFORE YOU RUN THE PRINTED CARDS TYPE, IF NOT RUN THE PRINTED CARDS TYPE
+    data = [id]
+    cardType = (db.execute("SELECT Ntype from cards JOIN ingamecards ON cards.Nid=ingamecards.printedid WHERE ingamecards.id=?", data)).fetchone()[0]
+    print(cardType)
+    if "Land" in cardType:
+        print("Card is a Land")
+        data = [gameID]
+        land = (db.execute("SELECT land" + str(playerIndex) + " FROM games WHERE id=?", data)).fetchone()[0]
+        if land > 0:
+            # change land location from hand to battlefield and tapped to 0
+            data = [id]
+            db.execute("UPDATE ingamecards SET location='battlefield', tapped=0 WHERE id=?", data)
+            land -= 1
+            data = [land, gameID]
+            db.execute("UPDATE games SET land" + str(activePlayer) + " = ? WHERE id=?;", data)
+            con.commit()
+            print("Card played")
+            return True
+        else:
+            print("You cannot play anymore lands this turn.")
+            return False
+    
         
 def PriorityLoop(players):
     data = [gameID]
@@ -96,6 +153,24 @@ def PriorityLoop(players):
             break
         if priorityIndex == firstPriority:
             break
+
+def ActivePriority():   
+    x = startingPlayerIndex
+    while True:
+        if passActivePriority[activePlayer] == False and x == startingPlayerIndex:
+            Action(gameID, x)
+        elif passPriority[x] == False:
+            Action(gameID, x)
+        if x == len(players) - 1:
+            x = 0
+        else:
+            x += 1
+        # print("Are these equal? " + str(priorityIndex) + " and " + str(firstPriority))
+        data = [x, gameID]
+        db.execute("UPDATE games SET priority=? WHERE id=?;", data)
+        con.commit()
+        if x == startingPlayerIndex:
+            break
         
 
     
@@ -110,77 +185,82 @@ def Mulligan(gameID, players):
     playerMulliganDecision = {}
     playerBottoms = {}
     playerReady = {}
-    for player in players:
-        playerMulliganDecision.update({player:True})
-        playerBottoms.update({player:0})
-        playerReady.update({player:False})
+    for x in range(len(players)):
+        playerMulliganDecision.update({x:True})
+        playerBottoms.update({x:0})
+        playerReady.update({x:False})
     anyMulligans = True
 
     while True:
         anyMulligans = False
-        for player in players:
-            if playerMulliganDecision[player] == True and playerReady[player] == False:
+        for x in range(len(players)):
+            if playerMulliganDecision[x] == True and playerReady[x] == False:
                                 # add code to show if other player(s) is(are) ready
-                if player == startingPlayer:
+                if x == startingPlayer:
                     print("You go first")
                 else:
                     print("Your oppontent goes first")
 
-                print(str(player) + "'s draw:")
-                data = [player, gameID]
+                print(playerNames[x] + "'s draw:")
+                data = [x, gameID]
                 hand = db.execute("SELECT Nname FROM cards JOIN ingamecards ON cards.Nid = ingamecards.printedid WHERE ingamecards.location='hand' AND controller=? AND game=?;", data)
                 handList = hand.fetchall()
                 for card in handList:
                     print(card[0])
                     # print the turn order for them to decide on the mulligsn
                     # also inform them of the decisions of the other player(s) (Your opponent kept a hand of x cards)
-                if playerBottoms[player] + 1 == 1:
-                    answer = input(f"{player}: Will you keep your hand? (you will return {(playerBottoms[player] + 1)} card to the bottom of your library.)")
+                if playerBottoms[x] == 0:
+                    answer = input(f"{playerNames[x]}: Will you keep your hand? (you will return {(playerBottoms[x] + 1)} card to the bottom of your library.)")
                 else:
-                    answer = input(f"{player}: Will you keep your hand? (you will return {(playerBottoms[player] + 1)} cards to the bottom of your library.)")
-                if answer=='y' or playerBottoms[player] >= 6:
-                    playerMulliganDecision.update({player:False})
+                    answer = input(f"{playerNames[x]}: Will you keep your hand? (you will return {(playerBottoms[x] + 1)} cards to the bottom of your library.)")
+                if answer=='y' or playerBottoms[x] >= 6:
+                    playerMulliganDecision.update({x:False})
                 else:
-                    playerMulliganDecision.update({player:True})
-                    playerBottoms.update({player:(playerBottoms[player] + 1)})
-        for player in players:
-            if playerMulliganDecision[player] == True:
+                    playerMulliganDecision.update({x:True})
+                    playerBottoms.update({x:(playerBottoms[x] + 1)})
+        for x in range(len(players)):
+            if playerMulliganDecision[x] == True:
                 anyMulligans = True
                 # put all cards back into deck, shuffle, then draw new hand
-                HandToLibraryAll(gameID, player)
-                ShuffleLibrary(gameID, player)
-                DrawLibraryHand(gameID, player, 7)
-            elif playerReady[player] == False:
-                if playerBottoms[player] > 0:
+                HandToLibraryAll(gameID, x)
+                ShuffleLibrary(gameID, x)
+                DrawLibraryHand(gameID, x, 7)
+            elif playerReady[x] == False:
+                if playerBottoms[x] > 0:
                     # Get library into a list
-                    library = GetLibraryIDs(gameID, player)
+                    library = GetLibraryIDs(gameID, x)
                     # get hand int a list
-                    hand = GetHandIDs(gameID, player)
-                    print(f"Put {playerBottoms[player]} cards on the bottom of your library: ")
-                    for x in range(len(hand)):
-                        name = IngameCardIDToName(hand[x])
-                        print(f"{(x + 1)}: {name}")
+                    hand = GetHandIDs(gameID, x)
+                    print(f"Put {playerBottoms[x]} cards on the bottom of your library: ")
+                    for y in range(len(hand)):
+                        name = IngameCardIDToName(hand[y])
+                        print(f"{(y + 1)}: {name}")
                     bottomedCards = []
-                    for x in range(playerBottoms[player]):
+                    for y in range(playerBottoms[x]):
                         # place as many hand cards as needed into the library list at the 0 position and remove from the hand list
 
                         # CHECK TO MAKE SURE YOU DONT BOTTOM THE SAME CARD MULTIPLE TIMES
 
-                        bottom = int(input(f"Card {x + 1}:"))
+                        bottom = int(input(f"Card {y + 1}:"))
                         library.insert(0, hand.pop(bottom - 1))
                     # push the changes to the database
-                    for x in range(len(library)):
-                        data = [x, library[x]]
+                    for y in range(len(library)):
+                        data = [y, library[y]]
                         db.execute("UPDATE ingamecards SET location='library', position=? WHERE id=?;", data)
                     for card in hand:
                         data = [card]
                         db.execute("UPDATE ingamecards SET location='hand', position='' WHERE id=?;", data)
                     con.commit()
-                playerReady[player] == True
+                playerReady[x] == True
         if not anyMulligans:
             break
 
 def BeginningPhase(gameID):
+    # MAKE THIS A FUNCTION AT SOME POINT
+    data = [gameID]
+    db.execute("UPDATE games SET land" + str(activePlayer) + " = 1 WHERE id=?;", data)
+    con.commit()
+
     UntapPhase(gameID)
     UpkeepPhase(gameID)
     DrawPhase(gameID)
@@ -196,14 +276,8 @@ def PreCombatMainPhase(gameID):
     data = [gameID]
     db.execute("UPDATE games SET phase=12 WHERE id=?;", data)
     con.commit()
-    hand = GetHandIDs(gameID, activePlayer)
-    print("Hand: ")
-    for x in range(len(hand)):
-        name = IngameCardIDToName(hand[x])
-        print(f"{(x + 1)}: {name[0]}")
-    # something
-    choice = int(input(f"Card:"))
-    print(choice)
+    ActivePriority()
+    print("成功!")
         
 def UntapPhase(gameID):
     # CHANGE phase IN THE TABLE TO INTEGER AND ASSIGN 1-61 FOR ALL PHASES OF A MAGIC TURN
@@ -276,16 +350,22 @@ con.commit()
 gameID =  db.lastrowid
 startingPlayerIndex = random.randrange(len(players))
 startingPlayer = players[startingPlayerIndex]
+playerNames = {}
 
 if (gameType == "Standard"):
     # set players
     for x in range(len(players)):
         data = [players[x], gameID]
         db.execute("UPDATE games SET player" + str(x) + "=? WHERE id=?", data)
+        data = [gameID]
+        playerName = (db.execute("SELECT username FROM users JOIN games ON users.id=games.player" + str(x) + " WHERE games.id=?", data)).fetchone()[0]
+        playerNames.update({x:playerName})
 
     # set life
     con.commit()
     StartingLife(gameID, gameType, players)
+
+print(playerNames)
 
 # assign decks to game
 
@@ -294,18 +374,18 @@ for x in range(len(players)):
     deckList = list(deck.fetchall())
     for card in deckList:
         for item in card:
-            data = [item, gameID, players[x]]
+            data = [item, gameID, x]
             db.execute("INSERT INTO ingamecards (printedid,game,owner,location,facedown) VALUES(?,?,?,'library',1);", data)
 
 con.commit()
 
 # Shuffle both libraries
 for x in range(len(players)):
-    ShuffleLibrary(gameID, players[x])
+    ShuffleLibrary(gameID, x)
 
 # Draw opening hands for both
 for x in range(len(players)):
-    DrawLibraryHand(gameID, players[x], 7)
+    DrawLibraryHand(gameID, x, 7)
 
 # process mulligans
 Mulligan(gameID, players)
@@ -313,18 +393,20 @@ Mulligan(gameID, players)
 # display opening hands
 for x in range(len(players)):
     print(f"Player {players[x]}'s starting hand:")
-    PrintHands(gameID, players[x])
+    PrintHands(gameID, x)
 
 # starting player begin the game
 # update game table with turn 0, phase untap, priority, land, 
 data = [startingPlayerIndex, gameID]
 db.execute("UPDATE games SET active=? WHERE id=?;", data)
-activePlayer = players[startingPlayerIndex]
+activePlayer = startingPlayerIndex
 
 # default all players to automatically pass priority (FOR NOW!!!)
 passPriority = {}
+passActivePriority = {}
 for x in range(len(players)):
     passPriority.update({x:True})
+    passActivePriority.update({x:False})
 
 # add turns taken to game table
 BeginningPhase(gameID)
