@@ -6,6 +6,7 @@ let db = new sqlite3.Database('./mtgopen.db', sqlite3.OPEN_READWRITE, (err) => {
     }
     console.log('Connected to the mtg open database.');
   });
+  prompt();
 
 db.serialize(() => {
     db.run(`INSERT INTO cards (id,name,edition,type)
