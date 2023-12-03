@@ -9,7 +9,7 @@ def CheckForActivatedAbility(id, playerIndex, destID):
     data = [id]
     priorityIndex = (db.execute("SELECT priority FROM games JOIN ingamecards ON ingamecards.game=games.id WHERE ingamecards.id=?", data)).fetchone()[0]
     data = [id]
-    cardInfo = (db.execute("SELECT * FROM ingamecards JOIN cards ON ingamecards.printedid=cards.Nid JOIN games ON ingamecards.game=games.id JOIN users on users.id=games.player" + str(priorityIndex) + " WHERE ingamecards.id=?", data)).fetchone()
+    cardInfo = (db.execute("SELECT * FROM ingamecards JOIN cards ON ingamecards.printed_id=cards.Nid JOIN games ON ingamecards.game=games.id JOIN users on users.id=games.player" + str(priorityIndex) + " WHERE ingamecards.id=?", data)).fetchone()
 
     # "(SELECT priority FROM games WHERE id=?) CASE WHEN '0' THEN player0 WHEN '1' THEN player1 WHEN '2' THEN player2 WHEN '3' THEN player3 WHEN '4' THEN player4 WHEN '5' THEN player5"
 
