@@ -75,6 +75,12 @@ def UntapLand(id, playerIndex):
         return True
     else:
         return False
+
+def MoveCard(id, destString, positionINT, tapped, facedown):
+    print(id)
+    data = [destString, positionINT, tapped, facedown, id]
+    db.execute("UPDATE ingamecards SET location=?, position=?, tapped=?, facedown=? WHERE id=?", data)
+    con.commit()
     
 def StartingLife(gameID, format, players):
     # set life
@@ -207,11 +213,11 @@ def PlayCard(id, playerIndex):
             print("You cannot play anymore lands this turn.")
             return False
     elif "Creature" in cardType:
-        if HasMana(id, playerIndex):
-            # CastSpell(id)
-            data = [id]
-            db.execute("UPDATE ingamecards SET location='battlefield', tapped=0, facedown=0 WHERE id=?", data)
-            return True
+        if PayMana(id, playerIndex):
+            if CastSpell(id, playerIndex):
+                return True
+            else:
+                return False
         else:
             if PayCardCost(id, playerIndex):
                 # CastSpell(id)
@@ -220,10 +226,44 @@ def PlayCard(id, playerIndex):
                 return True
             else:
                 return False
+
+def CastSpell(id, playerIndex):
+    # Place on top of the stack (copy)
+    stackTopIndex = GetStackTopIndex(gameID)
+    if stackTopIndex == None:
+        data = [id, gameID, playerIndex, 0]
+        db.execute("INSERT INTO stacks (ingamecard_id,game_id,owner_id,position) VALUES(?,?,?,?);", data)
+    else:
+        data = [id, gameID, playerIndex, (stackTopIndex + 1)]
+        db.execute("INSERT INTO stacks (ingamecard_id,game_id,owner_id,position) VALUES(?,?,?,?);", data)
+    stackID = db.lastrowid
+    con.commit()
+    # Pass priority till it returns true or false
+    PriorityLoop()
+    # Remove from the stack
+    print(GetStackTopIndex(gameID))
+    print(stackID)
+    if GetStackTopIndex(gameID) == stackID:
+        data = [stackID]
+        db.execute("DELETE FROM stacks WHERE id=?", data)
+        con.commit()
+        # Move "physical" card to battlefield or graveyard or hand or wherever
+        MoveCard(id, "battlefield", '',0,0)
+       
+        # return bool
+        return True
+    else:
+        print("Card countered or something")
+        return False
+
+def GetStackTopIndex(gameID):
+        data = [gameID]
+        index = (db.execute("SELECT id FROM stacks WHERE game_id=? ORDER BY position DESC LIMIT 1", data)).fetchone()
+        if index != None:
+            index = index[0]
+        return index
     
-def HasMana(id, playerIndex):
-    
-    
+def PayMana(id, playerIndex):
     # manaSources = GetManaSources(gameID, playerIndex)
     while True:
         
@@ -232,17 +272,13 @@ def HasMana(id, playerIndex):
 
         name = IngameCardIDToName(id)
         manaString = IngameCardIDToCostString(id)
-        print("This is the mana pool:")
-        print(manaPoolDB)
         # Compare price to pool
         while True:
             for x in range(len(manaPoolDB)):
-                print(manaString[len(manaString) - 3:])
                 if manaString[len(manaString) - 3:] in manaPoolDB[x]:
                     manaString = re.sub(manaString[len(manaString) - 3:],'',manaString)
                     manaPoolDB.pop(x)
                     if not manaString:
-                        print("debug10")
                         return True
                     continue
             break
@@ -346,15 +382,16 @@ def GetAvailableMana(playerIndex):
         print("no mana in pool")
     return manaPoolDict
         
-def PriorityLoop(players):
+def PriorityLoop():
     data = [gameID]
     priorityIndex = (db.execute("SELECT priority FROM games WHERE id=?;", data)).fetchone()[0]
     firstPriority = priorityIndex
     data = [gameID]
-    db.execute("SELECT * FROM ingamecards WHERE id=? AND position='stack';", data)
-    topStackOwner = None
-    if db.fetchone() is not None:
-        topStackOwner = (db.execute("SELECT owner FROM ingamecards WHERE id=? ORDER BY location LIMIT 1;", data)).fetchone()[0]
+    topOfTheStack = (db.execute("SELECT * FROM stacks WHERE id=? LIMIT 1;", data)).fetchone()
+    topStackOwner = ''
+    print(topOfTheStack)
+    if topOfTheStack != None:
+        topStackOwner = topOfTheStack['owner_id']
     
     while True:
         if passPriority[priorityIndex] == False:
@@ -483,6 +520,217 @@ def BeginningPhase(gameID):
     DrawPhase(gameID)
     PreCombatMainPhase(gameID)
 
+def EndingPhase(gameID):
+    EndPhase(gameID)
+    CleanupPhase(gameID)
+    print("成功!")
+
+def EndPhase(gameID):
+    # "At the beginning of the end step" or "At the beginning of the next end step" triggered abilities trigger. A
+    data = [gameID]
+    db.execute("UPDATE games SET phase=54 WHERE id=?;", data)
+    # The active player gets priority to cast instants, spells with flash, and to use activated abilities. B
+    data = [gameID]
+    db.execute("UPDATE games SET phase=55 WHERE id=?;", data)
+    #drain mana from pools
+    data = [gameID]
+    db.execute("UPDATE games SET phase=56 WHERE id=?;", data)
+    DrainManaPools(gameID,56)
+
+def CleanupPhase(gameID):
+    # The active player discards down to his maximum hand size (usually seven).
+    data = [gameID]
+    db.execute("UPDATE games SET phase=57 WHERE id=?;", data)
+    # Simultaneously remove all damage from permanents and end all "until end of turn" or "this turn" effects.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=58 WHERE id=?;", data)
+    # Check for state-based actions and triggered abilities, such as those that trigger "at the beginning of the next cleanup step". A
+    data = [gameID]
+    db.execute("UPDATE games SET phase=59 WHERE id=?;", data)
+    # If no state-based actions or triggered abilities occur, unused mana empties from each player's mana pool and the cleanup step ends.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=60 WHERE id=?;", data)
+    # The active player gets priority to cast instants, spells with flash, and to use activated abilities. B
+    data = [gameID]
+    db.execute("UPDATE games SET phase=61 WHERE id=?;", data)
+    #drain mana from pools
+    data = [gameID]
+    db.execute("UPDATE games SET phase=62 WHERE id=?;", data)
+    DrainManaPools(gameID,62)
+    # Repeat the cleanup step.
+    
+def PostCombatMainPhase(gameID):
+    # pre combat main phasey things happen 
+    data = [gameID]
+    db.execute("UPDATE games SET phase=51 WHERE id=?;", data)
+    con.commit()
+
+    # land and sorcery speed spells can be played/cast
+    data = [gameID]
+    db.execute("UPDATE games SET phase=52 WHERE id=?;", data)
+    con.commit()
+    ActivePriority()
+    #drain mana from pools
+    data = [gameID]
+    db.execute("UPDATE games SET phase=53 WHERE id=?;", data)
+    DrainManaPools(gameID,53)
+    EndingPhase()
+
+def CombatPhase(gameID):
+    BeginningofCombatPhase(gameID)
+    if DeclareAttackersPhase(gameID):
+        DeclareBlockersPhase(gameID)
+        CombatDamagePhase(gameID)
+    EndOfCombatPhase(gameID)
+    PostCombatMainPhase(gameID)
+
+def BeginningofCombatPhase(gameID):
+    # "At beginning of combat" triggered abilities trigger. A
+    data = [gameID]
+    db.execute("UPDATE games SET phase=14 WHERE id=?;", data)
+    con.commit()
+    #     The active player gets priority to cast instants, spells with flash, and to use activated abilities. B
+    data = [gameID]
+    db.execute("UPDATE games SET phase=15 WHERE id=?;", data)
+    con.commit()
+    PriorityLoop()
+    #drain mana from pools
+    data = [gameID]
+    db.execute("UPDATE games SET phase=16 WHERE id=?;", data)
+    DrainManaPools(gameID,16)
+
+def DeclareAttackersPhase(gameID)
+    attackersDeclared = False
+    # The active player declares his attackers. If no attackers are declared, the Declare Blockers and Combat Damage steps are skipped.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=17 WHERE id=?;", data)
+    if DeclareAttackers():
+        attackersDeclared = True
+
+    # Triggered abilities that trigger off attackers being declared trigger. A
+    data = [gameID]
+    db.execute("UPDATE games SET phase=18 WHERE id=?;", data)
+    # The active player gets priority to cast instants, spells with flash, and to use activated abilities. B
+    data = [gameID]
+    db.execute("UPDATE games SET phase=19 WHERE id=?;", data)
+    PriorityLoop()
+    #drain mana from pools
+    data = [gameID]
+    db.execute("UPDATE games SET phase=20 WHERE id=?;", data)
+    DrainManaPools(gameID,20)
+    return attackersDeclared
+
+def DeclareBlockersPhase(gameID)
+    # The defending player declares his blockers and which attacking creatures they will block.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=21 WHERE id=?;", data)
+    DeclareBlockers()
+    # For each attacking creature that has become blocked, the active player declares the order that combat damage will be assigned to blockers.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=22 WHERE id=?;", data)
+    ActiveDeclareDamageOrder()
+    # For each blocking creature, the defending player declares the order that combat damage will be assigned to attackers.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=23 WHERE id=?;", data)
+    DefendingDeclareDamageOrder()
+    # Triggered abilities that trigger off blockers being declared trigger. A
+    data = [gameID]
+    db.execute("UPDATE games SET phase=24 WHERE id=?;", data)
+    # Triggered abilities that trigger off blockers being declared trigger. A
+    data = [gameID]
+    db.execute("UPDATE games SET phase=25 WHERE id=?;", data)
+    # The active player gets priority to cast instants, spells with flash, and to use activated abilities. B
+    data = [gameID]
+    db.execute("UPDATE games SET phase=26 WHERE id=?;", data)
+    PriorityLoop()
+    # If a spell or ability causes a creature on the battlefield to block an attacking creature, players declare that creature's relative placement in the order that combat damage will be assigned to and by that creature's blockers.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=27 WHERE id=?;", data)
+    # If a creature is put onto the battlefield blocking, the active player declares its relative placement in the order that combat damage will be assigned for that creature's blockers.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=28 WHERE id=?;", data)
+    #drain mana from pools
+    data = [gameID]
+    db.execute("UPDATE games SET phase=29 WHERE id=?;", data)
+
+def CombatDamagePhase(gameID):
+    FirstDoubleStrikeCombatDamagePhase(gameID)
+    NonFirstDoubleStrikeCombatDamagePhase(gameID)
+
+def FirstDoubleStrikeCombatDamagePhase(gameID):
+    # If no attacking or blocking creatures have first or double strike, then skip this substep.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=30 WHERE id=?;", data)
+    # All attacking creatures with first or double strike assign combat damage to their blockers.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=31 WHERE id=?;", data)
+    # All unblocked creatures with first or double strike assign combat damage to defending player or declared planeswalkers.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=32 WHERE id=?;", data)
+    # All defending creatures with first or double strike assign combat damage to their attackers.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=33 WHERE id=?;", data)
+    # All assigned damage is dealt simultaneously. This does not use the stack, and may not be responded to.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=34 WHERE id=?;", data)
+    # "Deals combat damage" and "is dealt combat damage" triggered abilities trigger. A
+    data = [gameID]
+    db.execute("UPDATE games SET phase=35 WHERE id=?;", data)
+    # The active player gets priority to cast instants, spells with flash, and to use activated abilities. B
+    data = [gameID]
+    db.execute("UPDATE games SET phase=36 WHERE id=?;", data)
+    #drain mana from pools
+    data = [gameID]
+    db.execute("UPDATE games SET phase=37 WHERE id=?;", data)
+    DrainManaPools(gameID,37)
+
+def NonFirstDoubleStrikeCombatDamagePhase(gameID):
+    #  All attacking creatures without first strike assign combat damage to their blockers.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=38 WHERE id=?;", data)
+    # All unblocked creatures without first strike assign combat damage to defending player or declared planeswalkers.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=39 WHERE id=?;", data)
+    # All defending creatures without first strike assign combat damage to their attackers.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=40 WHERE id=?;", data)
+    # All assigned damage is dealt simultaneously. This does not use the stack, and may not be responded to.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=41 WHERE id=?;", data)
+    # "Deals combat damage" and "is dealt combat damage" triggered abilities trigger. A
+    data = [gameID]
+    db.execute("UPDATE games SET phase=42 WHERE id=?;", data)
+    # The active player gets priority to cast instants, spells with flash, and to use activated abilities. B
+    data = [gameID]
+    db.execute("UPDATE games SET phase=43 WHERE id=?;", data)
+    # Unused mana empties from each player's mana pool.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=44 WHERE id=?;", data)
+    # "Until end of combat" effects end.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=45 WHERE id=?;", data)
+    #drain mana from pools
+    data = [gameID]
+    db.execute("UPDATE games SET phase=46 WHERE id=?;", data)
+    DrainManaPools(gameID,46)
+
+
+def EndOfCombatPhase(gameID):
+    # "At end of combat" effects trigger. A
+    data = [gameID]
+    db.execute("UPDATE games SET phase=47 WHERE id=?;", data)
+    # The active player gets priority to cast instants, spells with flash, and to use activated abilities. B
+    data = [gameID]
+    db.execute("UPDATE games SET phase=48 WHERE id=?;", data)
+    # All creatures and planeswalkers are removed from combat.
+    data = [gameID]
+    db.execute("UPDATE games SET phase=49 WHERE id=?;", data)
+    #drain mana from pools
+    data = [gameID]
+    db.execute("UPDATE games SET phase=50 WHERE id=?;", data)
+    DrainManaPools(gameID,13)
+        
+
 def PreCombatMainPhase(gameID):
     # pre combat main phasey things happen 
     data = [gameID]
@@ -494,7 +742,11 @@ def PreCombatMainPhase(gameID):
     db.execute("UPDATE games SET phase=12 WHERE id=?;", data)
     con.commit()
     ActivePriority()
-    print("成功!")
+    #drain mana from pools
+    data = [gameID]
+    db.execute("UPDATE games SET phase=13 WHERE id=?;", data)
+    DrainManaPools(gameID,13)
+    CombatPhase(gameID)
         
 def UntapPhase(gameID):
     # CHANGE phase IN THE TABLE TO INTEGER AND ASSIGN 1-61 FOR ALL PHASES OF A MAGIC TURN
@@ -528,7 +780,7 @@ def UpkeepPhase(gameID):
     db.execute("UPDATE games SET phase=6 WHERE id=?;", data)
     data = [startingPlayerIndex, gameID]
     db.execute("UPDATE games SET priority=? WHERE id=?;", data)
-    PriorityLoop(players)
+    PriorityLoop()
     #drain mana from pools
     data = [gameID]
     db.execute("UPDATE games SET phase=7 WHERE id=?;", data)
@@ -543,7 +795,7 @@ def DrawPhase(gameID):
     # give active player priority
     data = [gameID]
     db.execute("UPDATE games SET phase=9 WHERE id=?;", data)
-    PriorityLoop(players)
+    PriorityLoop()
     #drain mana from pools
     data = [gameID]
     db.execute("UPDATE games SET phase=10 WHERE id=?;", data)
