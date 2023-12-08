@@ -1,5 +1,6 @@
 import etb
 import random
+import re
 import string
 import sqlite3
 con = sqlite3.connect("mtgopen.db")
@@ -53,7 +54,9 @@ class Card:
         print(f"You played a {self.name} into the battlefield, is it tapped? {self.tapped}")
 
     def get_cost(self):
-        cost_string = self.mana_cost
+        costs = []
+        costs.append(self.mana_cost)
+        return costs
 
 
 class Permanent(Card):
@@ -126,10 +129,9 @@ class Enchantment_Creature(Creature, Enchantment):
         super().__init__(name,id,game,owner,controller,location,position,token,tapped,face_down,flipped,phased_out,color_identity,card_set,card_type,mana_cost,cmc,ability,color,assoc_id,gen_mana, sum_sick, power, toughness)
 
 class Mana:
-    def __init__(self, quantity, mana_type, player, source, destination, refundable, restrictions, duration, trigger):
-        self.quantity = quantity
+    def __init__(self, mana_type, owner, source, destination, refundable, restrictions, duration, trigger):
         self.mana_type = mana_type
-        self.player = player
+        self.owner = owner
         self.source = source
         self.destination = destination
         self.refundable = refundable
@@ -349,7 +351,7 @@ def play_card(card_index, player_index):
             print("You cannot play anymore lands this turn.")
             return False
     else:
-        if PayMana(card_index, player_index):
+        if pay_mana_from_pool(card_index, player_index):
             if CastSpell(card_index, player_index):
                 return True
             else:
@@ -364,7 +366,42 @@ def play_card(card_index, player_index):
                 return False
             
 def pay_mana_from_pool(card_index, player_index):
-    cost = decks[player_index][card_index].get_cost()
+    costs = decks[player_index][card_index].get_cost()
+    if len(costs) == 1:
+        costs[0] = re.split(r'(\{\w{1,2}\})', costs[0])
+        while '' in costs[0]:
+            costs[0].remove('')
+    if len(costs) > 1:
+        input("Pick a casting cost: ")
+        for cost in costs:
+            pass
+
+    while True:
+        for x in range(len(costs)):
+            print(f"{x + 1}: {costs[x]}")
+        print("P to cancel")
+        answer = input("Please choose a cost:")
+        if answer == 'p':
+            return False
+        else:
+            paid = {}
+            # pick attack target code
+            while True:
+                print(costs[int(answer) - 1])
+                for mana in costs[int(answer) - 1]:
+                    paid.update({mana:False})
+                print(mana)
+                for y in range(len(mana)):
+                    print(f"{y + 1}: {mana[y]}")
+                print("P to cancel")
+                chosenCost = input("Please choose the mana to pay:")
+                if answer == 'p':
+                    return False
+
+
+
+    
+
             
 def enters_the_battlefield(player_index, card_index):
     for deck in decks:
